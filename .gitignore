@@ -1,0 +1,16 @@
+# Sujet et documents de travail internes
+Mini-projet - Proposition 2.pdf
+DOCUMENTATION_PROJET.md
+AUDIT_ET_PLAN_ACTION.md
+
+# Python
+__pycache__/
+*.pyc
+
+# Prolog
+*.qlf
+*~
+
+# Système
+.DS_Store
+Thumbs.db

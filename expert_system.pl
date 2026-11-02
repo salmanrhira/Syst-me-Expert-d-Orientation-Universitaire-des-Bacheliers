@@ -35,21 +35,23 @@ calculer_adequation(Id, MoyenneEleve, InteretsEleve, Score) :-
     Score is Diff + (NbInterets * 0.5).
 
 % --- 5. Classification des Recommandations ---
-% Ambitieux : Moyenne proche du seuil (-0.5 à +0.8)
+% Ambitieux : Moyenne proche du seuil (-0.5 à +0.8) pour formations sélectives
 classer_formation(Id, MoyenneEleve, 'Ambitieux') :-
-    formation(Id, _, _, _, _, Seuil, _, _, _, _, _, _),
+    formation(Id, _, _, _, _, Seuil, _, Mode, _, _, _, _),
+    Mode \== ouvert,
     Diff is MoyenneEleve - Seuil,
     Diff >= -0.5, Diff < 0.8.
 
-% Réaliste : Moyenne confortable
+% Réaliste : Moyenne confortable (0.8 à 2.0 au-dessus du seuil) pour formations sélectives
 classer_formation(Id, MoyenneEleve, 'Réaliste') :-
-    formation(Id, _, _, _, _, Seuil, _, _, _, _, _, _),
+    formation(Id, _, _, _, _, Seuil, _, Mode, _, _, _, _),
+    Mode \== ouvert,
     Diff is MoyenneEleve - Seuil,
     Diff >= 0.8, Diff < 2.0.
 
-% Sûr : Moyenne très supérieure ou accès ouvert
+% Sûr : Moyenne très supérieure (>= 2.0) ou accès ouvert
 classer_formation(Id, MoyenneEleve, 'Sûr') :-
-    formation(Id, _, Mode, _, _, Seuil, _, _, _, _, _, _),
+    formation(Id, _, _, _, _, Seuil, _, Mode, _, _, _, _),
     (Mode == ouvert ; (Diff is MoyenneEleve - Seuil, Diff >= 2.0)).
 
 % --- 6. Moteur d'Explication ---
