@@ -1,113 +1,85 @@
-# Système Expert d'Orientation Universitaire Post-Bac (Maroc)
+# Système Expert d'Orientation Universitaire Post-Bac (Maroc) 🎓
 
-> **Module :** Fondements Avancés de l'Intelligence Artificielle (Master IA – S1)  
-> **Enseignante :** Pr. Hasna ELALAOUI  
-> **Année universitaire :** 2026-2027  
-
----
-
-## 📌 Présentation du Projet
-
-Chaque année au Maroc, les bacheliers font face à un choix crucial parmi une multitude d'établissements et de filières (Grandes écoles d'ingénieurs, management, médecine, instituts techniques, prépas CPGE, BTS, OFPPT, universités...).
-
-Ce projet consiste à concevoir un **système expert d'orientation post-bac explicable et interactif en Prolog**, capable d'analyser le profil scolaire et les préférences d'un bachelier pour lui recommander des orientations ciblées, réalistes et justifiées.
-
-### Fonctionnalités principales :
-* **Filtrage d'éligibilité :** Vérification de la compatibilité du type de baccalauréat (SM, SPC, SVT, Économie, etc.) et des frais de scolarité par rapport au budget max.
-* **Analyse des risques académiques :** Détection préventive des notes fragiles (< 12/20) dans les matières clés de la filière cible.
-* **Calcul d'adéquation :** Score d'affinité combinant l'écart par rapport au seuil indicatif et la correspondance avec les centres d'intérêt / débouchés professionnels.
-* **Classification tripartite :** Catégorisation claire des formations recommandées :
-  * 🎯 **Ambitieux :** Filières sélectives dont le seuil est très proche de la moyenne de l'élève.
-  * ⚖️ **Réaliste :** Formations en adéquation confortable avec le niveau académique.
-  * 🛡️ **Sûr :** Filières à admission garantie (accès ouvert) ou marge de note très sécurisante.
-* **Moteur d'explication :** Restitution en langage naturel des justifications (« Pourquoi ce choix ? », points forts, alertes de risque).
+**Module :** Fondements Avancés de l'Intelligence Artificielle (Master IA – S1)  
+**Enseignante :** Pr. Hasna ELALAOUI  
+**Année universitaire :** 2026-2027  
 
 ---
 
-## 🏗️ Architecture du Projet
+## 🌟 Présentation du Projet
+
+Ce projet implémente un **système expert d'aide à l'orientation post-baccalauréat au Maroc**, conçu pour délivrer des conseils d'orientation **personnalisés**, **explicables** et **hiérarchisés**.
+
+Le système analyse le profil complet de l'élève (série de bac, moyenne générale, notes par matière clé, centres d'intérêt professionnels, contraintes de ville, budget annuel, préférence public/privé) et interroge une base de connaissances de **100 formations post-bac réelles au Maroc**.
+
+Il classe les recommandations en trois catégories de risque et d'adéquation :
+* 🟢 **Sûr :** Accès ouvert garanti (FSJES, FLSH, FS) ou formations professionnalisantes courtes assurées (BTS, OFPPT, EST) avec marge confortable.
+* 🔵 **Réaliste :** Profil académique solide au-dessus du seuil indicatif avec équilibre entre matières clés et débouchés.
+* 🟠 **Ambitieux :** Filières sélectives d'excellence à concours éliminatoire (CPGE, Médecine, Architecture ENA) ou seuil indicatif très proche de la moyenne de l'élève.
+
+Chaque suggestion s'accompagne d'une **justification pédagogique transparente** (points forts, alertes sur les matières fragiles, mobilité de ville et alternative de repli sécurisée en cas d'échec).
+
+---
+
+## 📂 Structure du Répertoire
 
 ```
-Système-Expert-d-Orientation/
-├── formations.csv        # Données sources : 100 formations réelles au Maroc (12 attributs)
-├── build_kb.py           # Script Python de conversion et génération automatique de la KB
-├── knowledge_base.pl     # Base de faits Prolog (prédicat formation/12)
-├── expert_system.pl      # Moteur d'inférence, règles d'éligibilité, scoring et explication
-└── README.md             # Documentation générale du projet
+.
+├── formations.csv              # Base de données source (100 formations avec 12 attributs)
+├── build_kb.py                 # Script de conversion CSV vers faits Prolog
+├── knowledge_base.pl           # Base de faits Prolog générée automatiquement
+├── expert_system.pl            # Moteur d'inférence, règles d'éligibilité, scoring et explication
+├── app.py                      # Interface Utilisateur moderne (IHM Streamlit)
+├── DOCUMENTATION_PROJET.md     # Documentation détaillée de l'architecture
+├── Mini-projet - Proposition 2.pdf # Énoncé officiel du projet
+└── README.md                   # Guide d'installation et d'utilisation
 ```
 
 ---
 
-## 📊 Base de Connaissances (`formations.csv` & `knowledge_base.pl`)
-
-La base regroupe **100 formations marocaines réelles** avec 12 attributs détaillés pour chaque filière :
-1. `Id` : Identifiant numérique unique (1 à 100).
-2. `Nom` : Nom de l'établissement et de la filière (ex. *ENSA Marrakech*, *ENCG Casablanca*, *FST Settat*...).
-3. `Type` : Type d'institution (`ecole_ingenieur`, `commerce`, `prepa`, `medecine`, `technique`, etc.).
-4. `Ville` : Ville d'implantation (`casablanca`, `rabat`, `marrakech`, `agadir`, `tanger`...).
-5. `BacsAcceptes` : Séries de bac éligibles (`sm`, `spc`, `svt`, `eco`, `tgc`, `ste`, `stm`, `lettres`, etc.).
-6. `Seuil` : Seuil indicatif de sélection sur 20.
-7. `MatieresCles` : Matières décisives pour réussir (`maths`, `physique`, `francais`, `svt`...).
-8. `ModeSelection` : Modalité d'accès (`tawjihi`, `concours`, `cursussup`, `dossier`, `ouvert`).
-9. `DureeAnnees` : Durée des études (2 ans pour BTS/OFPPT, 3 ans pour Licence/EST, 5 ans pour ENSA/ENCG, etc.).
-10. `Debouches` : Métiers cibles pour le calcul d'affinité.
-11. `Statut` : Établissement `public` ou `prive`.
-12. `FraisAnnuels` : Frais de scolarité annuels en MAD (0 DH pour le public).
-
----
-
-## ⚙️ Installation & Utilisation
+## 🚀 Guide d'Utilisation
 
 ### Prérequis
-* [SWI-Prolog](https://www.swi-prolog.org/) (version 9.0 ou supérieure)
-* [Python 3.10+](https://www.python.org/)
+1. **SWI-Prolog** (installé et accessible, ex: `C:\Program Files\swipl\bin\swipl.exe`)
+2. **Python 3.10+** avec `streamlit` et `pandas`
 
-### 1. Régénérer la base de faits Prolog (optionnel)
-Si `formations.csv` est mis à jour :
-```bash
-python build_kb.py
+### Option 1 : Utilisation en Console Pure Prolog
+
+Lancez directement le conseiller interactif dans SWI-Prolog :
+
+```powershell
+swipl -s expert_system.pl -g "lancer_conseiller."
 ```
 
-### 2. Lancer le Système Expert sous SWI-Prolog
-Ouvrez un terminal et démarrez la session Prolog :
-```bash
-swipl expert_system.pl
+Le système vous posera des questions interactives sur votre Bac, votre moyenne, vos notes clés, centres d'intérêt, budget et villes, puis affichera le **Top 5 des recommandations** avec leurs explications détaillées.
+
+Vous pouvez aussi tester des requêtes directement dans le terminal Prolog :
+```prolog
+?- [expert_system].
+?- recommander_profil(sm, 16.5, [[maths, 17], [physique, 16]], [genie_logiciel, intelligence_artificielle], [casablanca, rabat], 0, public, 5).
 ```
 
-### 3. Exemples de Requêtes Prolog
+### Option 2 : Lancer l'Interface Graphique (IHM Web Streamlit)
 
-* **Tester l'éligibilité d'une formation (ex: ID 1 - ENSA Marrakech pour un Bac SPC avec budget 0 DH) :**
-  ```prolog
-  ?- est_eligible(1, spc, 0).
-  % true.
-  ```
+Pour lancer l'application web conviviale et interactive :
 
-* **Détecter les matières à risque :**
-  ```prolog
-  ?- matiere_faible(1, [[maths, 11], [physique, 15]], Matiere).
-  % Matiere = maths.
-  ```
+```powershell
+streamlit run app.py
+```
 
-* **Classer une formation selon une moyenne :**
-  ```prolog
-  ?- classer_formation(1, 14.5, Categorie).
-  % Categorie = 'Ambitieux'.
-
-  ?- classer_formation(1, 16.0, Categorie).
-  % Categorie = 'Réaliste'.
-  ```
-
-* **Obtenir une explication détaillée :**
-  ```prolog
-  ?- expliquer(1, spc, 15.0, [[maths, 10], [physique, 16]]).
-  % --- Justification pour ENSA Marrakech ---
-  % - Votre Bac (spc) est accepté.
-  % - Votre moyenne (15.00) dépasse le seuil indicatif (14.50).
-  % - Alerte: Votre niveau en maths est considéré comme un risque pour cette filière.
-  ```
+L'application s'ouvre automatiquement dans votre navigateur (sur `http://localhost:8501`) avec :
+* Saisie intuitive du profil (curseurs, listes déroulantes, filtres par ville et budget).
+* Affichage des recommandations avec badges de statut colorés (Ambitieux / Réaliste / Sûr).
+* Justifications explicatives déroulantes (points forts, alertes, solutions de repli).
+* Explorateur de données pour parcourir les 100 formations du Maroc.
 
 ---
 
-## 🚀 Prochaines Étapes
-- [ ] Déploiement d'une interface graphique interactive (Streamlit en Python reliée à SWI-Prolog).
-- [ ] Intégration du prédicat d'orchestration global `recommander/2` (Top 5 pondéré).
-- [ ] Rédaction du rapport théorique final (Logique des prédicats & validation des cas de test).
+## 🧪 Régénération de la Base de Faits Prolog
+
+Si vous modifiez ou enrichissez `formations.csv`, exécutez :
+
+```powershell
+python build_kb.py
+```
+Cela met à jour automatiquement `knowledge_base.pl`.
