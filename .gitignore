@@ -3,6 +3,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+ENV/
 
 # Prolog
 *.qlf

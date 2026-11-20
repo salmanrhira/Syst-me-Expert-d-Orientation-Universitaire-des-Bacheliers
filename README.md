@@ -30,9 +30,11 @@ Chaque suggestion s'accompagne d'une **justification pédagogique transparente**
 ├── knowledge_base.pl           # Base de faits Prolog générée automatiquement
 ├── expert_system.pl            # Moteur d'inférence, règles d'éligibilité, scoring et explication
 ├── app.py                      # Interface Utilisateur moderne (IHM Streamlit)
-├── DOCUMENTATION_PROJET.md     # Documentation détaillée de l'architecture
-├── Mini-projet - Proposition 2.pdf # Énoncé officiel du projet
-└── README.md                   # Guide d'installation et d'utilisation
+├── requirements.txt            # Dépendances Python du projet
+├── tests/
+│   └── test_expert_system.py   # Suite de tests unitaires et d'intégration (pytest)
+├── DOCUMENTATION_PROJET.md     # Documentation technique et scientifique complète
+└── README.md                   # Guide d'accueil et d'utilisation
 ```
 
 ---
@@ -41,7 +43,12 @@ Chaque suggestion s'accompagne d'une **justification pédagogique transparente**
 
 ### Prérequis
 1. **SWI-Prolog** (installé et accessible, ex: `C:\Program Files\swipl\bin\swipl.exe`)
-2. **Python 3.10+** avec `streamlit` et `pandas`
+2. **Python 3.10+**
+
+### Installation des Dépendances
+```powershell
+pip install -r requirements.txt
+```
 
 ### Option 1 : Utilisation en Console Pure Prolog
 
@@ -61,7 +68,7 @@ Vous pouvez aussi tester des requêtes directement dans le terminal Prolog :
 
 ### Option 2 : Lancer l'Interface Graphique (IHM Web Streamlit)
 
-Pour lancer l'application web conviviale et interactive :
+Pour lancer manuellement l'application web conviviale et interactive :
 
 ```powershell
 streamlit run app.py
@@ -71,11 +78,22 @@ L'application s'ouvre automatiquement dans votre navigateur (sur `http://localho
 * Saisie intuitive du profil (curseurs, listes déroulantes, filtres par ville et budget).
 * Affichage des recommandations avec badges de statut colorés (Ambitieux / Réaliste / Sûr).
 * Justifications explicatives déroulantes (points forts, alertes, solutions de repli).
-* Explorateur de données pour parcourir les 100 formations du Maroc.
+* Bouton d'exportation pour télécharger la **Fiche d'Orientation Personnalisée** (Markdown).
+* Explorateur interactif avec métriques et filtres sur les 100 formations du Maroc.
 
 ---
 
-## 🧪 Régénération de la Base de Faits Prolog
+## 🧪 Tests et Validation de la Qualité
+
+Pour lancer la suite de tests automatisés (11 tests unitaires et d'intégration) :
+
+```powershell
+pytest tests/test_expert_system.py -v
+```
+
+---
+
+## 🔄 Régénération de la Base de Faits Prolog
 
 Si vous modifiez ou enrichissez `formations.csv`, exécutez :
 
