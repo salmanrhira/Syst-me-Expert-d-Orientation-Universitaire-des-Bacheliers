@@ -1,0 +1,6 @@
+# Dépendances principales du Système Expert d'Orientation Post-Bac
+streamlit>=1.30.0
+pandas>=2.0.0
+
+# Outils de tests et qualité de code
+pytest>=8.0.0

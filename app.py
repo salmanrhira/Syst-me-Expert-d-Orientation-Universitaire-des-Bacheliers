@@ -90,6 +90,14 @@ def interroger_systeme_expert(bac: str, moyenne: float, notes_tuple: tuple,
             return json.loads(json_str)
         else:
             return []
+    except FileNotFoundError:
+        st.error(
+            "❌ **SWI-Prolog est introuvable sur votre machine.**\n\n"
+            "Pour faire fonctionner le moteur d'inférence, veuillez installer SWI-Prolog "
+            "depuis [https://www.swi-prolog.org/download/stable](https://www.swi-prolog.org/download/stable) "
+            "et vérifier qu'il est accessible dans les variables d'environnement (PATH)."
+        )
+        return []
     except Exception as e:
         st.error(f"Exception lors de la communication avec le moteur Prolog : {e}")
         return []
@@ -268,6 +276,25 @@ with st.sidebar:
         st.cache_data.clear()
         st.rerun()
 
+def generer_markdown_rapport(resultats, bac_nom, moyenne, interets, villes, budget, statut):
+    lignes = [
+        "# 🎓 Rapport Personnalisé d'Orientation Post-Bac (Maroc)",
+        f"**Série de Bac :** {bac_nom} | **Moyenne :** {moyenne:.2f}/20",
+        f"**Statut souhaité :** {statut.capitalize()} | **Budget Max :** {budget:,} DH",
+        f"**Villes prioritaires :** {', '.join(villes) if villes else 'Toutes villes'}",
+        f"**Centres d'intérêt :** {', '.join(interets) if interets else 'Non spécifiés'}",
+        f"\n## 🏆 Recommandations du Système Expert (Top {len(resultats)})\n"
+    ]
+    for r in resultats:
+        lignes.append(f"### #{r['rang']} - {r['nom']} (Score: {r['score']}/100 - Catégorie: {r['categorie']})")
+        lignes.append(f"- **Ville :** {r['ville'].capitalize()} | **Durée :** {r['duree']} ans | **Statut :** {r['statut'].capitalize()} ({r['frais']} DH/an)")
+        if r.get('points_forts'):
+            lignes.append(f"- **Points forts matières :** {', '.join(r['points_forts'])}")
+        if r.get('alertes'):
+            lignes.append(f"- **Alertes matières :** {', '.join(r['alertes'])}")
+        lignes.append(f"- **Option de repli sécurisée :** {r.get('repli', 'Université / OFPPT')}\n")
+    return "\n".join(lignes)
+
 # Préparation des structures sérialisables en tuples pour le cache
 notes_tuple = tuple((m, float(notes_dict[m])) for m in notes_dict)
 interets_tuple = tuple(interets_selectionnes) if interets_selectionnes else tuple()
@@ -311,7 +338,21 @@ with tab_recommandations:
             "* Vérifiez que votre moyenne est suffisante pour les seuils de présélection."
         )
     else:
-        st.subheader(f"✨ Top {len(resultats)} Recommandations Classées par Adéquation")
+        col_title, col_export = st.columns([3, 1])
+        with col_title:
+            st.subheader(f"✨ Top {len(resultats)} Recommandations Classées par Adéquation")
+        with col_export:
+            rapport_md = generer_markdown_rapport(
+                resultats, dict_bacs[bac_selection], moyenne_bac,
+                interets_selectionnes, villes_selectionnees, budget_annuel, statut_pref
+            )
+            st.download_button(
+                "📥 Télécharger la Fiche",
+                data=rapport_md,
+                file_name="fiche_orientation_bachelier.md",
+                mime="text/markdown",
+                use_container_width=True
+            )
         
         for item in resultats:
             cat = item.get("categorie", "Réaliste")
@@ -416,6 +457,13 @@ with tab_base:
     csv_file = Path("formations.csv")
     if csv_file.exists():
         df = pd.read_csv(csv_file)
+        
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Formations Référencées", len(df))
+        m2.metric("Villes Couvertes", df["City"].nunique())
+        m3.metric("Filières Publiques", len(df[df["Status"].str.strip().str.lower() == "public"]))
+        m4.metric("Filières Privées", len(df[df["Status"].str.strip().str.lower() == "prive"]))
+        st.divider()
         
         col_filtre1, col_filtre2 = st.columns(2)
         with col_filtre1:

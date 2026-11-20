@@ -26,8 +26,9 @@ def escape_prolog_string(val: str) -> str:
     return f"'{escaped}'"
 
 def generate_knowledge_base():
-    csv_path = Path("formations.csv")
-    pl_path = Path("knowledge_base.pl")
+    base_dir = Path(__file__).parent.resolve()
+    csv_path = base_dir / "formations.csv"
+    pl_path = base_dir / "knowledge_base.pl"
     
     if not csv_path.exists():
         raise FileNotFoundError(f"Fichier introuvable: {csv_path}")
