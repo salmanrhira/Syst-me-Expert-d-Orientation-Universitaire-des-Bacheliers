@@ -1,7 +1,6 @@
 """
-Interface Utilisateur (IHM) : Système Expert d'Orientation Post-Bac au Maroc
-Développé avec Streamlit et interconnecté en temps réel avec le moteur Prolog (expert_system.pl).
-Module : Fondements Avancés de l'IA (Master IA - S1) - Pr. Hasna ELALAOUI
+Système Expert d'Orientation Post-Bac au Maroc
+Module : Fondements Avancés de l'IA (Master IA - S1) — Pr. Hasna ELALAOUI
 """
 
 import json
@@ -12,470 +11,419 @@ from pathlib import Path
 import streamlit as st
 import pandas as pd
 
-# Configuration de la page Streamlit
 st.set_page_config(
-    page_title="Système Expert d'Orientation Post-Bac Maroc",
+    page_title="Orientation Post-Bac — Maroc",
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Répertoire de base du projet
+# CSS minimaliste
+st.markdown("""
+<style>
+    .block-container { padding-top: 2rem; padding-bottom: 2rem; }
+    h1 { font-size: 1.6rem !important; font-weight: 600; }
+    h3 { font-size: 1.1rem !important; font-weight: 600; margin-bottom: 0.2rem; }
+    .stTabs [data-baseweb="tab"] { font-size: 0.9rem; }
+    .card {
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 1.2rem 1.4rem;
+        margin-bottom: 1rem;
+        background: #fafafa;
+    }
+    .badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 20px;
+        font-size: 0.78rem;
+        font-weight: 500;
+        margin-right: 6px;
+    }
+    .badge-sur    { background: #e8f5e9; color: #2e7d32; }
+    .badge-real   { background: #e3f2fd; color: #1565c0; }
+    .badge-ambi   { background: #fff3e0; color: #e65100; }
+    .meta-row     { color: #555; font-size: 0.85rem; margin-top: 0.3rem; }
+    .score-label  { font-size: 2rem; font-weight: 700; color: #333; }
+    .score-sub    { font-size: 0.75rem; color: #888; }
+    hr.thin       { border: none; border-top: 1px solid #eee; margin: 1rem 0; }
+</style>
+""", unsafe_allow_html=True)
+
+# ── Utilitaires ────────────────────────────────────────────────────────────────
+
 BASE_DIR = Path(__file__).parent.resolve()
 EXPERT_PL_PATH = str(BASE_DIR / "expert_system.pl")
 
-# Recherche de l'exécutable swipl
-def find_swipl_executable() -> str:
+def find_swipl() -> str:
     candidate = shutil.which("swipl")
     if candidate:
         return candidate
-    common_paths = [
+    for p in [
         r"C:\Program Files\swipl\bin\swipl.exe",
         r"C:\Program Files (x86)\swipl\bin\swipl.exe",
         os.path.expandvars(r"%LOCALAPPDATA%\Programs\swipl\bin\swipl.exe"),
-    ]
-    for p in common_paths:
+    ]:
         if Path(p).exists():
             return p
     return "swipl"
 
-SWIPL_PATH = find_swipl_executable()
+SWIPL = find_swipl()
 
 @st.cache_data(show_spinner=False)
-def interroger_systeme_expert(bac: str, moyenne: float, notes_tuple: tuple,
-                              interets_tuple: tuple, villes_tuple: tuple, budget: int,
-                              statut: str, top_n: int = 5):
-    """
-    Appelle le moteur d'inférence SWI-Prolog et récupère les recommandations au format JSON.
-    La fonction est mise en cache pour une réactivité instantanée dès qu'un paramètre change.
-    """
-    notes_prolog = "[" + ", ".join([f"[{m}, {float(n):.1f}]" for m, n in notes_tuple]) + "]"
-    interets_prolog = "[" + ", ".join(interets_tuple) + "]"
-    villes_prolog = "[" + ", ".join(villes_tuple) + "]"
-    
+def recommander(bac, moyenne, notes_t, interets_t, villes_t, budget, statut, top_n):
+    notes_pl    = "[" + ", ".join(f"[{m}, {float(n):.1f}]" for m, n in notes_t) + "]"
+    interets_pl = "[" + ", ".join(interets_t) + "]"
+    villes_pl   = "[" + ", ".join(villes_t) + "]"
     query = (
-        f"recommander_json({bac}, {moyenne:.2f}, {notes_prolog}, {interets_prolog}, "
-        f"{villes_prolog}, {budget}, {statut}, {top_n}), halt."
+        f"recommander_json({bac}, {moyenne:.2f}, {notes_pl}, {interets_pl}, "
+        f"{villes_pl}, {budget}, {statut}, {top_n}), halt."
     )
-    
-    cmd = [
-        SWIPL_PATH,
-        "-q",
-        "-s", EXPERT_PL_PATH,
-        "-g", query
-    ]
-    
     try:
         proc = subprocess.run(
-            cmd,
-            cwd=str(BASE_DIR),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=10
+            [SWIPL, "-q", "-s", EXPERT_PL_PATH, "-g", query],
+            cwd=str(BASE_DIR), capture_output=True,
+            text=True, encoding="utf-8", timeout=10
         )
-        if proc.returncode != 0 and not proc.stdout.strip():
-            st.error(f"Erreur d'exécution Prolog : {proc.stderr}")
-            return []
-        
-        raw_output = proc.stdout.strip()
-        if not raw_output:
-            return []
-            
-        # Extraction robuste du bloc JSON délimité par [ ... ]
-        start = raw_output.find("[")
-        end = raw_output.rfind("]")
-        if start != -1 and end != -1 and end >= start:
-            json_str = raw_output[start:end+1]
-            return json.loads(json_str)
-        else:
-            return []
+        raw = proc.stdout.strip()
+        s, e = raw.find("["), raw.rfind("]")
+        if s != -1 and e >= s:
+            return json.loads(raw[s:e+1])
+        return []
     except FileNotFoundError:
         st.error(
-            "❌ **SWI-Prolog est introuvable sur votre machine.**\n\n"
-            "Pour faire fonctionner le moteur d'inférence, veuillez installer SWI-Prolog "
-            "depuis [https://www.swi-prolog.org/download/stable](https://www.swi-prolog.org/download/stable) "
-            "et vérifier qu'il est accessible dans les variables d'environnement (PATH)."
+            "SWI-Prolog est introuvable. "
+            "Installez-le depuis [swi-prolog.org](https://www.swi-prolog.org/download/stable) "
+            "et ajoutez-le au PATH."
         )
         return []
     except Exception as e:
-        st.error(f"Exception lors de la communication avec le moteur Prolog : {e}")
+        st.error(f"Erreur moteur Prolog : {e}")
         return []
 
-# --- En-tête de l'application ---
-st.title("🎓 Système Expert d'Orientation Post-Bac au Maroc")
-st.markdown("""
-**Module :** Fondements Avancés de l'IA (Master IA - S1) | **Enseignante :** Pr. Hasna ELALAOUI  
-Ce système expert interactif interroge en temps réel un **moteur d'inférence en Prolog pur** relié à une base de **100 formations marocaines**.  
-*Toute modification de vos critères ci-contre recalcule instantanément vos recommandations.*
-""")
-st.divider()
+def badge_html(cat):
+    cls  = {"Sûr": "badge-sur", "Réaliste": "badge-real", "Ambitieux": "badge-ambi"}.get(cat, "badge-real")
+    return f'<span class="badge {cls}">{cat}</span>'
 
-# --- Barre latérale : Saisie dynamique du Profil ---
+def export_md(resultats, bac_nom, moyenne, interets, villes, budget, statut):
+    lines = [
+        "# Fiche d'orientation post-bac",
+        f"**Bac :** {bac_nom}  |  **Moyenne :** {moyenne:.2f}/20  |  "
+        f"**Budget :** {budget:,} DH  |  **Statut :** {statut}",
+        f"**Villes :** {', '.join(villes) or 'toutes'}  |  "
+        f"**Intérêts :** {', '.join(interets) or '—'}",
+        "",
+    ]
+    for r in resultats:
+        lines.append(f"## {r['rang']}. {r['nom']} — {r['categorie']} ({r['score']}/100)")
+        lines.append(
+            f"- Ville : {r['ville'].capitalize()}  |  Durée : {r['duree']} ans  |  "
+            f"Statut : {r['statut'].capitalize()}  |  Frais : {r['frais']:,} DH/an"
+        )
+        if r.get("points_forts"):
+            lines.append(f"- Points forts : {', '.join(r['points_forts'])}")
+        if r.get("alertes"):
+            lines.append(f"- À surveiller : {', '.join(r['alertes'])}")
+        lines.append(f"- Repli conseillé : {r.get('repli', '—')}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+# ── Sidebar ────────────────────────────────────────────────────────────────────
+
+BACS = {
+    "sm":           "Sciences Mathématiques (SM)",
+    "spc":          "Physique-Chimie (SPC)",
+    "svt":          "Sciences de la Vie et de la Terre (SVT)",
+    "eco":          "Sciences Économiques",
+    "tgc":          "Techniques de Gestion et Comptabilité",
+    "ste":          "Sciences et Technologies Électriques",
+    "stm":          "Sciences et Technologies Mécaniques",
+    "lettres":      "Lettres",
+    "humaines":     "Sciences Humaines",
+    "arts_appliques": "Arts Appliqués",
+}
+
 with st.sidebar:
-    st.header("👤 Profil du Bachelier")
-    
-    # 1. Série de Bac
-    dict_bacs = {
-        "sm": "Sciences Mathématiques (SM - A & B)",
-        "spc": "Physique - Chimie (SPC)",
-        "svt": "Sciences de la Vie et de la Terre (SVT)",
-        "eco": "Sciences Économiques (ÉCO)",
-        "tgc": "Techniques de Gestion et Comptabilité (TGC)",
-        "ste": "Sciences et Technologies Électriques (STE)",
-        "stm": "Sciences et Technologies Mécaniques (STM)",
-        "lettres": "Lettres",
-        "humaines": "Sciences Humaines",
-        "arts_appliques": "Arts Appliqués"
+    st.markdown("### Votre profil")
+    st.caption("Les résultats se mettent à jour automatiquement.")
+
+    bac = st.selectbox("Série du bac", list(BACS.keys()),
+                       format_func=lambda k: BACS[k], key="bac_input")
+
+    moyenne = st.slider("Moyenne générale (/20)", 10.0, 20.0, 15.5, 0.1, key="moy")
+
+    st.markdown("**Notes par matière**")
+    col1, col2 = st.columns(2)
+    notes = {}
+
+    if bac in ("sm", "spc", "svt"):
+        with col1:
+            notes["maths"]      = st.number_input("Maths",     0.0, 20.0, 16.0, 0.5, key="n_maths")
+            notes["physique"]   = st.number_input("Physique",  0.0, 20.0, 15.0, 0.5, key="n_phys")
+            notes["svt"]        = st.number_input("SVT",       0.0, 20.0, 14.0, 0.5, key="n_svt")
+        with col2:
+            notes["francais"]   = st.number_input("Français",  0.0, 20.0, 14.0, 0.5, key="n_fr")
+            notes["anglais"]    = st.number_input("Anglais",   0.0, 20.0, 15.0, 0.5, key="n_ang")
+            notes["philosophie"]= st.number_input("Philo",     0.0, 20.0, 13.0, 0.5, key="n_philo")
+
+    elif bac in ("ste", "stm"):
+        with col1:
+            notes["maths"]      = st.number_input("Maths",         0.0, 20.0, 15.0, 0.5, key="n_maths")
+            notes["physique"]   = st.number_input("Physique",      0.0, 20.0, 14.0, 0.5, key="n_phys")
+            notes["technologie"]= st.number_input("Sc. Ingénieur", 0.0, 20.0, 16.0, 0.5, key="n_tech")
+        with col2:
+            notes["francais"]   = st.number_input("Français",  0.0, 20.0, 13.0, 0.5, key="n_fr")
+            notes["anglais"]    = st.number_input("Anglais",   0.0, 20.0, 14.0, 0.5, key="n_ang")
+            notes["philosophie"]= st.number_input("Philo",     0.0, 20.0, 12.0, 0.5, key="n_philo")
+
+    elif bac in ("eco", "tgc"):
+        with col1:
+            notes["economie"]     = st.number_input("Économie",     0.0, 20.0, 15.5, 0.5, key="n_eco")
+            notes["comptabilite"] = st.number_input("Comptabilité", 0.0, 20.0, 15.0, 0.5, key="n_compta")
+            notes["maths"]        = st.number_input("Maths",        0.0, 20.0, 13.5, 0.5, key="n_maths")
+        with col2:
+            notes["francais"]     = st.number_input("Français",     0.0, 20.0, 14.0, 0.5, key="n_fr")
+            notes["anglais"]      = st.number_input("Anglais",      0.0, 20.0, 14.5, 0.5, key="n_ang")
+            notes["philosophie"]  = st.number_input("Philo",        0.0, 20.0, 13.0, 0.5, key="n_philo")
+
+    elif bac in ("lettres", "humaines"):
+        with col1:
+            notes["francais"]   = st.number_input("Français",    0.0, 20.0, 14.0, 0.5, key="n_fr")
+            notes["arabe"]      = st.number_input("Arabe",       0.0, 20.0, 15.0, 0.5, key="n_arabe")
+            notes["litterature"]= st.number_input("Littérature", 0.0, 20.0, 14.5, 0.5, key="n_litt")
+        with col2:
+            notes["histoire"]    = st.number_input("Histoire-Géo", 0.0, 20.0, 13.5, 0.5, key="n_hist")
+            notes["philosophie"] = st.number_input("Philo",        0.0, 20.0, 14.0, 0.5, key="n_philo")
+            notes["anglais"]     = st.number_input("Anglais",      0.0, 20.0, 15.0, 0.5, key="n_ang")
+
+    else:  # arts_appliques
+        with col1:
+            notes["dessin"]     = st.number_input("Dessin & Arts", 0.0, 20.0, 16.0, 0.5, key="n_dessin")
+            notes["creativite"] = st.number_input("Créativité",    0.0, 20.0, 16.0, 0.5, key="n_crea")
+            notes["francais"]   = st.number_input("Français",      0.0, 20.0, 14.0, 0.5, key="n_fr")
+        with col2:
+            notes["philosophie"]= st.number_input("Philo",  0.0, 20.0, 13.0, 0.5, key="n_philo")
+            notes["anglais"]    = st.number_input("Anglais",0.0, 20.0, 14.0, 0.5, key="n_ang")
+            notes["maths"]      = st.number_input("Maths",  0.0, 20.0, 12.0, 0.5, key="n_maths")
+
+    st.markdown("**Centres d'intérêt**")
+    defaults = {
+        ("sm","spc","svt"):       ["genie_logiciel", "intelligence_artificielle"],
+        ("ste","stm"):            ["electronique", "mecanique"],
+        ("eco","tgc"):            ["finance", "marketing"],
+        ("lettres","humaines"):   ["droit_affaires", "communication"],
     }
-    
-    bac_selection = st.selectbox(
-        "1. Série du Baccalauréat :",
-        options=list(dict_bacs.keys()),
-        format_func=lambda k: dict_bacs[k],
-        index=0,
-        key="bac_input"
-    )
-    
-    # 2. Moyenne générale
-    moyenne_bac = st.slider(
-        "2. Moyenne générale au Bac (/20) :",
-        min_value=10.0,
-        max_value=20.0,
-        value=15.5,
-        step=0.1,
-        key="moyenne_input"
-    )
-    
-    # 3. Notes clés adaptées selon la filière du Bac
-    st.subheader("📝 3. Notes dans les Matières Clés")
-    
-    col_n1, col_n2 = st.columns(2)
-    notes_dict = {}
-    
-    if bac_selection in ["sm", "spc", "svt"]:
-        with col_n1:
-            notes_dict["maths"] = st.number_input("Mathématiques :", 0.0, 20.0, 16.0, 0.5, key="n_maths")
-            notes_dict["physique"] = st.number_input("Physique-Chimie :", 0.0, 20.0, 15.0, 0.5, key="n_phys")
-            notes_dict["svt"] = st.number_input("SVT :", 0.0, 20.0, 14.0, 0.5, key="n_svt")
-        with col_n2:
-            notes_dict["francais"] = st.number_input("Français :", 0.0, 20.0, 14.0, 0.5, key="n_fr")
-            notes_dict["anglais"] = st.number_input("Anglais :", 0.0, 20.0, 15.0, 0.5, key="n_ang")
-            notes_dict["philosophie"] = st.number_input("Philosophie :", 0.0, 20.0, 13.0, 0.5, key="n_philo")
-            
-    elif bac_selection in ["ste", "stm"]:
-        with col_n1:
-            notes_dict["maths"] = st.number_input("Mathématiques :", 0.0, 20.0, 15.0, 0.5, key="n_maths")
-            notes_dict["physique"] = st.number_input("Physique :", 0.0, 20.0, 14.0, 0.5, key="n_phys")
-            notes_dict["technologie"] = st.number_input("Sc. de l'Ingénieur :", 0.0, 20.0, 16.0, 0.5, key="n_tech")
-        with col_n2:
-            notes_dict["francais"] = st.number_input("Français :", 0.0, 20.0, 13.0, 0.5, key="n_fr")
-            notes_dict["anglais"] = st.number_input("Anglais :", 0.0, 20.0, 14.0, 0.5, key="n_ang")
-            notes_dict["philosophie"] = st.number_input("Philosophie :", 0.0, 20.0, 12.0, 0.5, key="n_philo")
+    def_int = next((v for k, v in defaults.items() if bac in k), ["design", "architecture"])
 
-    elif bac_selection in ["eco", "tgc"]:
-        with col_n1:
-            notes_dict["economie"] = st.number_input("Économie Générale :", 0.0, 20.0, 15.5, 0.5, key="n_eco")
-            notes_dict["comptabilite"] = st.number_input("Comptabilité :", 0.0, 20.0, 15.0, 0.5, key="n_compta")
-            notes_dict["maths"] = st.number_input("Mathématiques :", 0.0, 20.0, 13.5, 0.5, key="n_maths")
-        with col_n2:
-            notes_dict["francais"] = st.number_input("Français :", 0.0, 20.0, 14.0, 0.5, key="n_fr")
-            notes_dict["anglais"] = st.number_input("Anglais :", 0.0, 20.0, 14.5, 0.5, key="n_ang")
-            notes_dict["philosophie"] = st.number_input("Philosophie :", 0.0, 20.0, 13.0, 0.5, key="n_philo")
-
-    elif bac_selection in ["lettres", "humaines"]:
-        with col_n1:
-            notes_dict["francais"] = st.number_input("Français :", 0.0, 20.0, 14.0, 0.5, key="n_fr")
-            notes_dict["arabe"] = st.number_input("Arabe :", 0.0, 20.0, 15.0, 0.5, key="n_arabe")
-            notes_dict["litterature"] = st.number_input("Littérature :", 0.0, 20.0, 14.5, 0.5, key="n_litt")
-        with col_n2:
-            notes_dict["histoire"] = st.number_input("Histoire-Géo :", 0.0, 20.0, 13.5, 0.5, key="n_hist")
-            notes_dict["philosophie"] = st.number_input("Philosophie :", 0.0, 20.0, 14.0, 0.5, key="n_philo")
-            notes_dict["anglais"] = st.number_input("Anglais :", 0.0, 20.0, 15.0, 0.5, key="n_ang")
-
-    else: # arts_appliques
-        with col_n1:
-            notes_dict["dessin"] = st.number_input("Dessin & Arts :", 0.0, 20.0, 16.0, 0.5, key="n_dessin")
-            notes_dict["creativite"] = st.number_input("Créativité :", 0.0, 20.0, 16.0, 0.5, key="n_crea")
-            notes_dict["francais"] = st.number_input("Français :", 0.0, 20.0, 14.0, 0.5, key="n_fr")
-        with col_n2:
-            notes_dict["philosophie"] = st.number_input("Philosophie :", 0.0, 20.0, 13.0, 0.5, key="n_philo")
-            notes_dict["anglais"] = st.number_input("Anglais :", 0.0, 20.0, 14.0, 0.5, key="n_ang")
-            notes_dict["maths"] = st.number_input("Mathématiques :", 0.0, 20.0, 12.0, 0.5, key="n_maths")
-
-    # 4. Centres d'intérêt professionnels
-    st.subheader("🎯 4. Centres d'Intérêt")
-    
-    # Définition des intérêts suggérés selon la série
-    if bac_selection in ["sm", "spc", "svt"]:
-        def_interets = ["genie_logiciel", "intelligence_artificielle"]
-    elif bac_selection in ["ste", "stm"]:
-        def_interets = ["electronique", "mecanique"]
-    elif bac_selection in ["eco", "tgc"]:
-        def_interets = ["finance", "marketing"]
-    elif bac_selection in ["lettres", "humaines"]:
-        def_interets = ["droit_affaires", "communication"]
-    else:
-        def_interets = ["design", "architecture"]
-        
     tous_interets = [
-        "genie_logiciel", "intelligence_artificielle", "cybersecurite", "reseaux", 
+        "genie_logiciel", "intelligence_artificielle", "cybersecurite", "reseaux",
         "data_science", "genie_civil", "genie_industriel", "mecanique", "electronique", "telecom",
         "medecine_generale", "chirurgie", "dentaire", "soins_infirmiers", "biologie",
-        "finance", "audit", "marketing", "commerce_international", "gestion_entreprise", "comptabilite", "banque",
-        "droit_affaires", "justice", "diplomatie", "journalisme", "communication", "traduction", 
-        "relations_internationales", "enseignement_francais", "enseignement_anglais",
-        "architecture", "urbanisme", "design", "arts_graphiques"
+        "finance", "audit", "marketing", "commerce_international", "gestion_entreprise",
+        "comptabilite", "banque", "droit_affaires", "justice", "diplomatie",
+        "journalisme", "communication", "traduction", "relations_internationales",
+        "enseignement_francais", "enseignement_anglais", "architecture", "urbanisme",
+        "design", "arts_graphiques",
     ]
-    
-    interets_selectionnes = st.multiselect(
-        "Domaines et métiers souhaités :",
-        options=tous_interets,
-        default=def_interets,
-        key=f"interets_input_{bac_selection}"
-    )
-    
-    # 5. Villes prioritaires
-    st.subheader("📍 5. Villes & Mobilité")
-    villes_possibles = [
-        "casablanca", "rabat", "marrakech", "fes", "tanger", "agadir", "oujda",
-        "kenitra", "settat", "meknes", "el_jadida", "tetouan", "benguerir", "ifrane",
-        "safi", "sale", "berrechid", "khouribga", "al_hoceima", "dakhla"
+    interets = st.multiselect("", tous_interets, default=def_int,
+                              key=f"int_{bac}", label_visibility="collapsed")
+
+    st.markdown("**Villes acceptées**")
+    villes_dispo = [
+        "casablanca","rabat","marrakech","fes","tanger","agadir","oujda",
+        "kenitra","settat","meknes","el_jadida","tetouan","benguerir","ifrane",
+        "safi","sale","berrechid","khouribga","al_hoceima","dakhla",
     ]
-    villes_selectionnees = st.multiselect(
-        "Villes préférées (par ordre de priorité) :",
-        options=villes_possibles,
-        default=["casablanca", "rabat"],
-        key="villes_input"
-    )
-    
-    # 6. Budget et Statut
-    st.subheader("💰 6. Budget & Statut")
-    col_b1, col_b2 = st.columns(2)
-    with col_b1:
-        budget_annuel = st.number_input(
-            "Budget max (DH) :",
-            min_value=0,
-            max_value=150000,
-            value=0,
-            step=5000,
-            key="budget_input",
-            help="0 DH pour cibler exclusivement les établissements publics gratuits."
-        )
-    with col_b2:
-        statut_pref = st.selectbox(
-            "Statut d'établissement :",
-            options=["public", "prive", "indifferent"],
-            format_func=lambda s: {"public": "Public uniquement", "prive": "Privé uniquement", "indifferent": "Indifférent"}[s],
-            key="statut_input"
-        )
-        
-    top_n = st.slider("Nombre de recommandations :", min_value=3, max_value=10, value=5, key="top_n_input")
-    
-    if st.button("🔄 Réinitialiser le cache / Recalculer", use_container_width=True):
+    villes = st.multiselect("", villes_dispo, default=["casablanca","rabat"],
+                            key="villes", label_visibility="collapsed")
+
+    st.markdown("**Budget & statut**")
+    c1, c2 = st.columns(2)
+    with c1:
+        budget = st.number_input("Budget max (DH)", 0, 150000, 0, 5000, key="budget",
+                                 help="0 DH = public uniquement")
+    with c2:
+        statut = st.selectbox("Statut", ["public","prive","indifferent"],
+                              format_func=lambda s: {"public":"Public","prive":"Privé",
+                                                     "indifferent":"Indifférent"}[s],
+                              key="statut")
+
+    top_n = st.slider("Nombre de résultats", 3, 10, 5, key="top_n")
+
+    if st.button("Recalculer", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
-def generer_markdown_rapport(resultats, bac_nom, moyenne, interets, villes, budget, statut):
-    lignes = [
-        "# 🎓 Rapport Personnalisé d'Orientation Post-Bac (Maroc)",
-        f"**Série de Bac :** {bac_nom} | **Moyenne :** {moyenne:.2f}/20",
-        f"**Statut souhaité :** {statut.capitalize()} | **Budget Max :** {budget:,} DH",
-        f"**Villes prioritaires :** {', '.join(villes) if villes else 'Toutes villes'}",
-        f"**Centres d'intérêt :** {', '.join(interets) if interets else 'Non spécifiés'}",
-        f"\n## 🏆 Recommandations du Système Expert (Top {len(resultats)})\n"
-    ]
-    for r in resultats:
-        lignes.append(f"### #{r['rang']} - {r['nom']} (Score: {r['score']}/100 - Catégorie: {r['categorie']})")
-        lignes.append(f"- **Ville :** {r['ville'].capitalize()} | **Durée :** {r['duree']} ans | **Statut :** {r['statut'].capitalize()} ({r['frais']} DH/an)")
-        if r.get('points_forts'):
-            lignes.append(f"- **Points forts matières :** {', '.join(r['points_forts'])}")
-        if r.get('alertes'):
-            lignes.append(f"- **Alertes matières :** {', '.join(r['alertes'])}")
-        lignes.append(f"- **Option de repli sécurisée :** {r.get('repli', 'Université / OFPPT')}\n")
-    return "\n".join(lignes)
 
-# Préparation des structures sérialisables en tuples pour le cache
-notes_tuple = tuple((m, float(notes_dict[m])) for m in notes_dict)
-interets_tuple = tuple(interets_selectionnes) if interets_selectionnes else tuple()
-villes_tuple = tuple(villes_selectionnees) if villes_selectionnees else tuple()
+# ── Calcul ─────────────────────────────────────────────────────────────────────
 
-# --- Calcul instantané et réactif des recommandations ---
-resultats = interroger_systeme_expert(
-    bac=bac_selection,
-    moyenne=moyenne_bac,
-    notes_tuple=notes_tuple,
-    interets_tuple=interets_tuple,
-    villes_tuple=villes_tuple,
-    budget=budget_annuel,
-    statut=statut_pref,
-    top_n=top_n
+notes_t   = tuple((m, float(notes[m])) for m in notes)
+interets_t = tuple(interets)
+villes_t   = tuple(villes)
+
+resultats = recommander(bac, moyenne, notes_t, interets_t, villes_t, budget, statut, top_n)
+
+
+# ── En-tête ────────────────────────────────────────────────────────────────────
+
+st.markdown("## Orientation post-bac au Maroc")
+st.caption(
+    f"Bac **{BACS[bac]}** · moyenne **{moyenne:.2f}/20** · "
+    f"budget **{budget:,} DH** · statut **{statut}**"
+)
+st.markdown('<hr class="thin">', unsafe_allow_html=True)
+
+
+# ── Onglets ────────────────────────────────────────────────────────────────────
+
+tab_res, tab_comment, tab_data = st.tabs(
+    ["Recommandations", "Comment ça marche ?", "Toutes les formations"]
 )
 
-# --- Zone Principale d'Affichage ---
-tab_recommandations, tab_explications, tab_base = st.tabs([
-    "🏆 Top Recommandations Personnalisées", 
-    "💡 Comment fonctionne le Moteur d'Inférence ?", 
-    "📚 Base de Connaissances (100 Formations)"
-])
 
-with tab_recommandations:
-    # Bandeau d'état récapitulatif
-    st.info(
-        f"📋 **Profil analysé en direct :** Bac **{dict_bacs[bac_selection]}** | "
-        f"Moyenne : **{moyenne_bac:.2f}/20** | "
-        f"Budget max : **{budget_annuel:,} DH** | "
-        f"Statut : **{statut_pref.capitalize()}** | "
-        f"Intérêts : *{', '.join(interets_selectionnes) if interets_selectionnes else 'Aucun filtre'}*"
-    )
+# ── Tab 1 : Recommandations ────────────────────────────────────────────────────
 
+with tab_res:
     if not resultats:
         st.warning(
-            "⚠️ **Aucune formation ne correspond strictement à cette combinaison de critères.**\n\n"
-            "Conseils du conseiller expert :\n"
-            "* Élargissez vos critères budgétaires si vous visez le privé.\n"
-            "* Élargissez la sélection des villes acceptées.\n"
-            "* Vérifiez que votre moyenne est suffisante pour les seuils de présélection."
+            "Aucune formation ne correspond à ces critères. "
+            "Essayez d'élargir les villes, le budget, ou de baisser légèrement le filtre de statut."
         )
     else:
-        col_title, col_export = st.columns([3, 1])
-        with col_title:
-            st.subheader(f"✨ Top {len(resultats)} Recommandations Classées par Adéquation")
-        with col_export:
-            rapport_md = generer_markdown_rapport(
-                resultats, dict_bacs[bac_selection], moyenne_bac,
-                interets_selectionnes, villes_selectionnees, budget_annuel, statut_pref
-            )
+        col_titre, col_dl = st.columns([4, 1])
+        with col_titre:
+            st.markdown(f"**{len(resultats)} formation(s) recommandée(s)**")
+        with col_dl:
             st.download_button(
-                "📥 Télécharger la Fiche",
-                data=rapport_md,
-                file_name="fiche_orientation_bachelier.md",
+                "Télécharger la fiche",
+                data=export_md(resultats, BACS[bac], moyenne, interets, villes, budget, statut),
+                file_name="orientation.md",
                 mime="text/markdown",
-                use_container_width=True
+                use_container_width=True,
             )
-        
+
         for item in resultats:
-            cat = item.get("categorie", "Réaliste")
-            
-            # Badge et style selon la catégorie
-            if cat == "Ambitieux":
-                cat_badge = "🟠 **Choix Ambitieux** (Filière d'excellence / Concours sélectif ou seuil proche)"
-                badge_color = "#FF9800"
-            elif cat == "Réaliste":
-                cat_badge = "🔵 **Choix Réaliste** (Très bonne adéquation profil / Seuil confortable)"
-                badge_color = "#2196F3"
-            else: # Sûr
-                cat_badge = "🟢 **Choix Sûr** (Accès ouvert garanti ou seuil largement dépassé)"
-                badge_color = "#4CAF50"
+            cat  = item.get("categorie", "Réaliste")
+            diff = item.get("diff", 0.0)
 
             with st.container():
-                col_gauche, col_droite = st.columns([3, 1])
-                
-                with col_gauche:
-                    st.markdown(f"### Rang #{item['rang']} : {item['nom']}")
+                left, right = st.columns([5, 1])
+
+                with left:
                     st.markdown(
-                        f"{cat_badge} &nbsp;|&nbsp; 📍 **Ville :** {item['ville'].capitalize()} &nbsp;|&nbsp; "
-                        f"⏱️ **Durée :** {item['duree']} ans &nbsp;|&nbsp; 🏛️ **Statut :** {item['statut'].capitalize()}"
+                        f"### {item['rang']}. {item['nom']} "
+                        f"{badge_html(cat)}",
+                        unsafe_allow_html=True,
                     )
-                
-                with col_droite:
-                    score = item['score']
-                    st.metric(label="Score d'adéquation", value=f"{score}/100")
-                
-                # Volet déroulant explicatif
-                with st.expander("🔍 Justification détaillée & Conseils du Système Expert", expanded=(item['rang'] <= 2)):
-                    col_det1, col_det2 = st.columns(2)
-                    
-                    with col_det1:
-                        st.markdown("**Points Forts du Profil :**")
-                        st.write(f"• **Baccalauréat :** Série `{bac_selection.upper()}` acceptée.")
-                        
-                        diff = item.get("diff", 0.0)
-                        if item['mode_selection'] == 'ouvert':
-                            st.write(f"• **Admission :** Accès ouvert garanti sans seuil éliminatoire.")
+                    frais_txt = "gratuit" if item["frais"] == 0 else f"{item['frais']:,} DH/an"
+                    st.markdown(
+                        f'<div class="meta-row">'
+                        f"{item['ville'].capitalize()} · "
+                        f"{item['duree']} ans · "
+                        f"{item['statut'].capitalize()} · "
+                        f"{frais_txt}"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                with right:
+                    st.markdown(
+                        f'<div style="text-align:center">'
+                        f'<div class="score-label">{item["score"]}</div>'
+                        f'<div class="score-sub">/ 100</div>'
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                with st.expander("Détails", expanded=(item["rang"] <= 2)):
+                    c1, c2 = st.columns(2)
+
+                    with c1:
+                        st.markdown("**Pourquoi cette formation ?**")
+                        # Accès
+                        if item["mode_selection"] == "ouvert":
+                            st.write("Accès ouvert — aucun seuil éliminatoire.")
                         elif diff >= 0:
-                            st.write(f"• **Moyenne :** Votre note (+{diff:.2f} pts) dépasse le seuil indicatif ({item['seuil']}/20).")
+                            st.write(f"Moyenne au-dessus du seuil de {item['seuil']}/20 (+{diff:.2f} pt).")
                         else:
-                            st.write(f"• **Attention seuil :** Note légèrement en dessous du seuil indicatif ({diff:.2f} pts).")
-                            
-                        interets_c = item.get("interets_communs", [])
-                        if interets_c:
-                            st.write(f"• **Débouchés en phase :** `{', '.join(interets_c)}`.")
-                            
-                        points_f = item.get("points_forts", [])
-                        if points_f:
-                            st.write(f"• **Matières clés solides :** `{', '.join(points_f)}` (≥ 14/20).")
+                            st.write(f"Moyenne légèrement en dessous du seuil ({diff:+.2f} pt).")
+                        # Intérêts communs
+                        if item.get("interets_communs"):
+                            st.write("Débouchés en phase : " + ", ".join(item["interets_communs"]) + ".")
+                        # Points forts
+                        if item.get("points_forts"):
+                            st.write("Bonnes notes en : " + ", ".join(item["points_forts"]) + " (≥ 14/20).")
 
-                    with col_det2:
-                        st.markdown("**Alertes & Risques Potentiels :**")
-                        alertes = item.get("alertes", [])
-                        if alertes:
-                            st.warning(f"⚠️ Matières clés fragiles : `{', '.join(alertes)}` (< 12/20).")
+                    with c2:
+                        st.markdown("**Points de vigilance**")
+                        if item.get("alertes"):
+                            st.warning("Note faible en : " + ", ".join(item["alertes"]) + " (< 12/20).")
                         else:
-                            st.success("✅ Aucune matière clé en dessous de 12/20.")
-                            
-                        if item['mode_selection'] == 'concours':
-                            st.info("ℹ️ Filière soumise à un concours d'entrée éliminatoire.")
-                        
-                        if villes_selectionnees and item['ville'] not in villes_selectionnees:
-                            st.warning(f"🚗 Mobilité : Située à {item['ville'].capitalize()}, en dehors de vos villes prioritaires.")
-                            
-                        st.markdown("**🛡️ Alternative de repli conseillée :**")
-                        st.info(f"*{item.get('repli', 'Faculté des Sciences ou OFPPT')}*")
+                            st.write("Aucune matière clé en difficulté.")
 
-                st.divider()
+                        if item["mode_selection"] == "concours":
+                            st.write("Concours d'entrée éliminatoire.")
 
-with tab_explications:
+                        if villes and item["ville"] not in villes:
+                            st.write(f"Hors de vos villes prioritaires ({item['ville'].capitalize()}).")
+
+                        if item.get("repli"):
+                            st.caption(f"Repli conseillé : {item['repli']}")
+
+                st.markdown('<hr class="thin">', unsafe_allow_html=True)
+
+
+# ── Tab 2 : Comment ça marche ──────────────────────────────────────────────────
+
+with tab_comment:
     st.markdown("""
-    ### Architecture et Logique d'Inférence du Système Expert
-    
-    Le système expert applique un modèle de raisonnement déductif structuré en 4 étapes :
-    
-    1. **Filtrage d'Éligibilité Stricte (`est_eligible_profil/5`) :**
-       * Vérification de la compatibilité de la série de Baccalauréat (`AcceptedBacs`).
-       * Respect du plafond budgétaire de l'élève (`BudgetMax >= AnnualFees`).
-       * Filtre du statut juridique souhaité (Public / Privé / Indifférent).
-       * Élimination des filières sélectives hors de portée ($Moyenne < Seuil - 1.5$).
-    
-    2. **Calcul du Score d'Adéquation Multi-Critères (sur 100 points) :**
-       * **Affinité Débouchés / Intérêts (Max 35 pts) :** Calcul de l'intersection entre les centres d'intérêt de l'élève et les débouchés réels de la filière.
-       * **Adéquation Académique (Max 40 pts) :** Marge par rapport au seuil indicatif de présélection, pondéré par les notes effectives dans les matières clés de la filière.
-       * **Adéquation Géographique (Max 15 pts) :** Bonus prioritaire pour la ville préférée de l'élève.
-       * **Adéquation Statut et Frais (Max 10 pts) :** Conformité avec les souhaits de coût et de statut juridique.
-    
-    3. **Catégorisation des Recommandations (`classer_formation/3`) :**
-       * **Choix Sûr :** Formations à accès ouvert (FSJES, FLSH, FS) ou formations professionnalisantes courtes (BTS, OFPPT, EST) avec marge confortable.
-       * **Choix Réaliste :** Profil académique solide au-dessus du seuil indicatif sans alerte critique sur les matières clés.
-       * **Choix Ambitieux :** Filières d'excellence à fort concours sélectif (CPGE, Médecine, ENA) ou seuil indicatif très proche de la moyenne.
-    
-    4. **Moteur d'Explication et de Repli (`expliquer_detail/6`) :**
-       * Pour chaque recommandation, le système justifie les raisons positives, signale les risques et préconise une **alternative de repli sécurisée** en cas d'imprévu.
-    """)
+Le moteur d'inférence est écrit en **Prolog pur** (SWI-Prolog). Il raisonne en quatre étapes :
 
-with tab_base:
-    st.markdown("### Exploration des 100 Formations Référencées au Maroc")
-    csv_file = Path("formations.csv")
+1. **Éligibilité** — Seules les formations compatibles avec votre bac, votre budget et votre
+   préférence public/privé sont retenues. Les filières très sélectives sont écartées si votre
+   moyenne est inférieure de plus de 1,5 point au seuil indicatif.
+
+2. **Score d'adéquation (sur 100)** — Quatre critères sont pondérés :
+   - Correspondance entre vos centres d'intérêt et les débouchés de la filière (35 pts)
+   - Marge par rapport au seuil et niveau dans les matières clés (40 pts)
+   - Localisation dans vos villes préférées (15 pts)
+   - Conformité avec votre préférence public / privé (10 pts)
+
+3. **Catégorisation** —
+   - **Sûr** : accès ouvert ou marge confortable (> 2,5 pts).
+   - **Réaliste** : profil solide au-dessus du seuil.
+   - **Ambitieux** : filière sélective à concours, ou seuil très proche de votre moyenne.
+
+4. **Explication** — Pour chaque résultat, le système identifie vos points forts,
+   signale les matières à risque et propose une alternative de repli.
+""")
+
+
+# ── Tab 3 : Toutes les formations ──────────────────────────────────────────────
+
+with tab_data:
+    csv_file = BASE_DIR / "formations.csv"
     if csv_file.exists():
         df = pd.read_csv(csv_file)
-        
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Formations Référencées", len(df))
-        m2.metric("Villes Couvertes", df["City"].nunique())
-        m3.metric("Filières Publiques", len(df[df["Status"].str.strip().str.lower() == "public"]))
-        m4.metric("Filières Privées", len(df[df["Status"].str.strip().str.lower() == "prive"]))
-        st.divider()
-        
-        col_filtre1, col_filtre2 = st.columns(2)
-        with col_filtre1:
-            ville_f = st.multiselect("Filtrer par ville :", options=sorted(df["City"].unique()), key="f_ville")
-        with col_filtre2:
-            type_f = st.multiselect("Filtrer par type :", options=sorted(df["Type"].unique()), key="f_type")
-            
-        df_display = df.copy()
-        if ville_f:
-            df_display = df_display[df_display["City"].isin(ville_f)]
-        if type_f:
-            df_display = df_display[df_display["Type"].isin(type_f)]
-            
-        st.dataframe(df_display, use_container_width=True, height=450)
-        st.caption(f"Affichage de {len(df_display)} formation(s) sur {len(df)} au total.")
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Formations", len(df))
+        c2.metric("Villes", df["City"].nunique())
+        c3.metric("Publiques", (df["Status"].str.lower() == "public").sum())
+        c4.metric("Privées",   (df["Status"].str.lower() == "prive").sum())
+
+        f1, f2 = st.columns(2)
+        with f1:
+            vf = st.multiselect("Ville", sorted(df["City"].unique()), key="f_ville")
+        with f2:
+            tf = st.multiselect("Type",  sorted(df["Type"].unique()),  key="f_type")
+
+        df_view = df.copy()
+        if vf: df_view = df_view[df_view["City"].isin(vf)]
+        if tf: df_view = df_view[df_view["Type"].isin(tf)]
+
+        st.dataframe(df_view, use_container_width=True, height=440)
+        st.caption(f"{len(df_view)} formation(s) affichée(s) sur {len(df)}.")
+    else:
+        st.error("Fichier formations.csv introuvable.")
